@@ -5,7 +5,7 @@ import plotly.express as px
 import plotly.io as pio
 import joblib
 
-app = Flask(__name__)
+app =  Flask(__name__)
 
 # ---------------------------------
 # MONGODB CONNECTION
