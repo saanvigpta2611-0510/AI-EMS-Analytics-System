@@ -903,8 +903,8 @@ def dashboard():
 
     # EFFICIENCY MACHINE GRAPH
 
-    efficiency_machine_data = df[
-        df["Machine_ID"] == best_efficiency_machine
+    efficiency_machine_data = ranking_df[
+        ranking_df["Machine_ID"] == best_efficiency_machine
     ]
 
     efficiency_trend = efficiency_machine_data.groupby(
@@ -938,8 +938,8 @@ def dashboard():
 
     # DOWNTIME MACHINE GRAPH
 
-    downtime_machine_data = df[
-        df["Machine_ID"] == highest_downtime_machine
+    downtime_machine_data = ranking_df[
+        ranking_df["Machine_ID"] == highest_downtime_machine
     ]
 
     downtime_trend = downtime_machine_data.groupby(
@@ -967,8 +967,8 @@ def dashboard():
 
     # DEFECT MACHINE GRAPH
 
-    defect_machine_data = df[
-        df["Machine_ID"] == most_defect_machine
+    defect_machine_data = ranking_df[
+        ranking_df["Machine_ID"] == most_defect_machine
     ]
 
     defect_trend = defect_machine_data.groupby(
