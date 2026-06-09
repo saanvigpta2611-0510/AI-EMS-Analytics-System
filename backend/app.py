@@ -72,6 +72,8 @@ def dashboard():
 
     df = pd.DataFrame(data)
 
+    print(df.columns.tolist())
+
     original_df = df.copy()
 
     # ---------------------------------
@@ -195,15 +197,59 @@ def dashboard():
         "Production_Date"
     )["Actual_Output"].sum().reset_index()
 
+
+    root_cause_data = df.groupby(
+        "Production_Date"
+    ).agg({
+
+        "Actual_Output": "sum",
+
+        "Downtime_Minutes": "mean",
+
+        "Production_Efficiency": "mean",
+
+        "Defect_Count": "sum",
+
+        "Machine_Temperature": "mean",
+
+        "Inventory_Level": "mean",
+
+        "Machine_Run_Time": "mean",
+
+        "Production_Target": "sum"
+
+    }).reset_index()
+
+
+    avg_output = root_cause_data["Actual_Output"].mean()
+
+    avg_downtime = root_cause_data["Downtime_Minutes"].mean()
+
+    avg_temp = root_cause_data["Machine_Temperature"].mean()
+
+    avg_defects = root_cause_data["Defect_Count"].mean()
+
+    avg_material = root_cause_data["Inventory_Level"].mean()
+
     fig1 = px.line(
 
-        trend_data,
+        root_cause_data,
 
         x="Production_Date",
 
         y="Actual_Output",
 
-        markers=True
+        markers=True,
+
+        custom_data=[
+            "Downtime_Minutes",
+            "Production_Efficiency",
+            "Defect_Count",
+            "Machine_Temperature",
+            "Inventory_Level",
+            "Machine_Run_Time",
+            "Production_Target"
+        ]
     )
 
     fig1.update_layout(
@@ -221,7 +267,8 @@ def dashboard():
 
     graph1 = pio.to_html(
         fig1,
-        full_html=False
+        full_html=False,
+        div_id="productionTrendGraph"
     )
 
     # ---------------------------------
@@ -395,6 +442,8 @@ def dashboard():
 
         # TEMPERATURE ANALYSIS
 
+        temperature_alert = False
+
         if machine_summary["Machine_Temperature"] > 75:
 
             ai_insights.append(
@@ -402,6 +451,8 @@ def dashboard():
                 "Machine temperature is critically high."
 
             )
+
+        temperature_alert = True
 
         # EFFICIENCY ANALYSIS
 
@@ -712,19 +763,19 @@ def dashboard():
 
         if defect_score >= 8:
 
-            defect_result = "HIGH DEFECT RISK"
+            defect_result = "HIGH RISK"
 
             defect_color = "danger"
 
         elif defect_score >= 4:
 
-            defect_result = "MEDIUM DEFECT RISK"
+            defect_result = "MEDIUM RISK"
 
             defect_color = "warning"
 
         else:
 
-            defect_result = "LOW DEFECT RISK"
+            defect_result = "LOW RISK"
 
             defect_color = "success"
 
@@ -817,19 +868,19 @@ def dashboard():
 
         if failure_score >= 11:
 
-            failure_result = "HIGH FAILURE RISK"
+            failure_result = "HIGH RISK"
 
             failure_color = "danger"
 
         elif failure_score >= 9:
 
-            failure_result = "MEDIUM FAILURE RISK"
+            failure_result = "MEDIUM RISK"
 
             failure_color = "warning"
 
         else:
 
-            failure_result = "LOW FAILURE RISK"
+            failure_result = "LOW RISK"
 
             failure_color = "success"
 
@@ -921,7 +972,8 @@ def dashboard():
 
     efficiency_fig.update_layout(
         template="plotly_white",
-        height=500
+        height=500,
+        autosize=True
     )
 
     efficiency_fig.update_traces(
@@ -931,7 +983,10 @@ def dashboard():
     )
 
     efficiency_fig.write_html(
-        "backend/static/efficiency_graph.html"
+        "backend/static/efficiency_graph.html",
+        config={
+            "responsive": True
+        }
     )
 
     # DOWNTIME MACHINE GRAPH
@@ -956,11 +1011,15 @@ def dashboard():
 
     downtime_fig.update_layout(
         template="plotly_white",
-        height=500
+        height=500,
+        autosize=True
     )
 
     downtime_fig.write_html(
-        "backend/static/downtime_graph.html"
+        "backend/static/downtime_graph.html",
+        config={
+            "responsive": True
+        }
     )
 
     # DEFECT MACHINE GRAPH
@@ -985,7 +1044,8 @@ def dashboard():
 
     defect_fig.update_layout(
         template="plotly_white",
-        height=500
+        height=500,
+        autosize=True
     )
 
     defect_fig.update_traces(
@@ -995,7 +1055,10 @@ def dashboard():
     )
 
     defect_fig.write_html(
-        "backend/static/defect_graph.html"
+        "backend/static/defect_graph.html",
+        config={
+            "responsive": True
+        }
     )
 
     # ---------------------------------
@@ -1271,6 +1334,8 @@ def dashboard():
         defect_causes=defect_causes,
 
         recommendations=recommendations,
+
+        temperature_alert=temperature_alert,
 
         machine_details=machine_details
     )
