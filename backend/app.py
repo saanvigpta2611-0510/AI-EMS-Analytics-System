@@ -1,11 +1,931 @@
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, redirect, session
 from pymongo import MongoClient
 import pandas as pd
 import plotly.express as px
 import plotly.io as pio
 import joblib
+import spacy
+from rapidfuzz import fuzz
+import re
+from flask import render_template
+from flask import request
+from flask import redirect
+from flask import url_for
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet
+from flask import send_file
+import os
 
 app =  Flask(__name__)
+app.secret_key = "ems_secret_key"
+
+nlp = spacy.load(
+    "en_core_web_sm"
+)
+
+BEST_MACHINE = ""
+DOWNTIME_MACHINE = ""
+DEFECT_MACHINE = ""
+
+CURRENT_MACHINE = "All"
+CURRENT_SHIFT = "All"
+CURRENT_PRODUCT = "All"
+CURRENT_DURATION = "Last 7 Days"
+
+
+LAST_TOTAL_OUTPUT = 0
+LAST_AVG_EFFICIENCY = 0
+LAST_AVG_DOWNTIME = 0
+LAST_TOTAL_DEFECTS = 0
+LAST_AI_INSIGHTS = []
+LAST_RISK_LEVEL = ""
+
+def normalize_message(message):
+
+    message = message.lower()
+
+    replacements = {
+
+        "helo": "hello",
+
+        "helloo": "hello",
+
+        "hii": "hi",
+
+        "hiii": "hi",
+
+        "hiiii": "hi",
+
+        "m103": "m-103",
+
+        "machine 103": "m-103",
+
+        "machine103": "m-103",
+
+        "m102": "m-102",
+
+        "machine 102": "m-102",
+
+        "m101": "m-101",
+
+        "machine 101": "m-101"
+
+    }
+
+    for old, new in replacements.items():
+
+        message = message.replace(
+            old,
+            new
+        )
+
+    return message
+
+intent_patterns = {
+
+    "greeting": [
+
+        "hello",
+        "hi",
+        "hey"
+
+    ],
+
+    "best_efficiency":[
+        "best efficiency",
+        "highest efficiency",
+        "maximum efficiency",
+        "max efficiency",
+        "most efficient machine",
+        "machine with highest efficiency",
+        "which machine has highest efficiency"
+    ],
+
+    "highest_downtime":[
+
+        "highest downtime",
+
+        "maximum downtime",
+
+        "max downtime",
+
+        "machine with highest downtime",
+
+        "which machine has highest downtime",
+
+        "machine having highest downtime"
+
+    ],
+
+    "most_defects":[
+
+        "most defects",
+
+        "highest defects",
+
+        "maximum defects",
+
+        "machine having most defects",
+
+        "machine with most defects",
+
+        "which machine has most defects"
+
+    ],
+
+    "total_defects": [
+
+        "total defects",
+
+        "number of defects",
+
+        "defect count"
+
+    ],
+
+    "production_output": [
+
+        "output",
+
+        "show output",
+
+        "production output",
+
+        "total output",
+
+        "output for",
+
+        "show production"
+
+    ],
+
+    "root_cause":[
+
+        "why was output low",
+
+        "root cause",
+
+        "reason for low output",
+
+        "why production dropped",
+
+        "why output low"
+
+    ],
+
+    "trend_analysis":[
+
+        "trend",
+
+        "show trend",
+
+        "output trend",
+
+        "efficiency trend",
+
+        "downtime trend",
+
+        "defect trend"
+
+    ],
+
+    "compare_machine":[
+
+        "compare",
+
+        "compare machines",
+
+        "machine comparison"
+
+    ]
+
+}
+
+def detect_intent(message):
+
+    best_match = None
+
+    highest_score = 0
+
+    for intent, phrases in intent_patterns.items():
+
+        for phrase in phrases:
+
+            score = fuzz.partial_ratio(
+
+                message,
+
+                phrase
+
+            )
+
+            if score > highest_score:
+
+                highest_score = score
+
+                best_match = intent
+
+    if highest_score > 75:
+
+        return best_match
+
+    return "unknown"
+
+
+@app.route("/chat")
+
+def chat():
+
+    message = request.args.get(
+        "message",
+        ""
+    )
+
+    message = normalize_message(
+        message
+    )
+
+    machines = re.findall(
+
+        r'm-\d+',
+
+        message.lower()
+
+    )
+
+    specific_date = None
+
+    months = {
+        "january":1,
+        "february":2,
+        "march":3,
+        "april":4,
+        "may":5,
+        "june":6,
+        "july":7,
+        "august":8,
+        "september":9,
+        "october":10,
+        "november":11,
+        "december":12
+    }
+
+    for month_name, month_num in months.items():
+
+        match = re.search(
+
+            month_name + r'\s+(\d+)',
+
+            message.lower()
+
+        )
+
+        if match:
+
+            day = int(match.group(1))
+
+            specific_date = pd.Timestamp(
+
+                year=2026,
+
+                month=month_num,
+
+                day=day
+
+            )
+
+            break
+
+    custom_days = None
+
+    match = re.search(
+
+        r'last\s+(\d+)\s+days',
+
+        message
+
+    )
+
+    if match:
+
+        custom_days = int(
+
+            match.group(1)
+
+        )
+
+    custom_weeks = None
+
+    match = re.search(
+        r'last\s+(\d+)\s+weeks',
+        message
+    )
+
+    if match:
+
+        custom_weeks = int(
+            match.group(1)
+        )
+
+    intent = detect_intent(message)
+
+    # Force analytics intents
+
+    if (
+        "efficiency" in message
+        or "downtime" in message
+        or "defect" in message
+        or "risk" in message
+        or "output" in message
+        or "why" in message
+        or "root cause" in message
+        or "reason" in message
+        or "compare" in message
+    ):
+
+        if "compare" in message:
+
+            intent = "compare_machine"
+
+        elif (
+            "trend" in message
+        ):
+
+            intent = "trend_analysis"
+
+        elif  (
+            "why" in message
+            or "root cause" in message
+            or "reason" in message
+        ):
+
+            intent = "root_cause"
+
+        elif "efficiency" in message:
+
+            intent = "best_efficiency"
+
+        elif "downtime" in message:
+
+            intent = "highest_downtime"
+
+        elif "defect" in message:
+
+            if "total" in message:
+
+                intent = "total_defects"
+
+            else:
+
+                intent = "most_defects"
+
+        elif "output" in message:
+
+            intent = "production_output"
+
+    data = list(collection.find())
+
+    df = pd.DataFrame(data)
+
+    df["Production_Date"] = pd.to_datetime(
+        df["Production_Date"]
+    )
+
+    filtered_df = df.copy()
+
+    filtered_df["Production_Date"] = pd.to_datetime(
+        filtered_df["Production_Date"]
+    )
+
+    latest_date = filtered_df["Production_Date"].max()
+
+    if custom_days:
+
+        filtered_df = df[
+            df["Production_Date"]
+            >= latest_date - pd.Timedelta(days=custom_days)
+        ]
+
+    elif custom_weeks:
+
+        filtered_df = df[
+            df["Production_Date"]
+            >= latest_date - pd.Timedelta(weeks=custom_weeks)
+        ]
+
+    machine = None
+    shift = None
+    product = None
+    duration = None
+    analytics_answer = None
+
+    global CURRENT_MACHINE
+    global CURRENT_SHIFT
+    global CURRENT_PRODUCT
+    global CURRENT_DURATION
+
+    if intent != "compare_machine":
+
+        if "m-101" in message:
+
+            machine = "M-101"
+
+        elif "m-102" in message:
+
+            machine = "M-102"
+
+        elif "m-103" in message:
+
+            machine = "M-103"
+
+        elif "m-104" in message:
+
+            machine = "M-104"
+
+    if "shift a" in message:
+
+        shift = "A"
+
+    elif "shift b" in message:
+
+        shift = "B"
+
+    elif "shift c" in message:
+
+        shift = "C"
+
+    if "pcb" in message:
+
+        product = "PCB"
+
+    elif "microchip" in message:
+
+        product = "Microchip"
+
+    elif "sensor" in message:
+
+        product = "Sensor"
+
+    if "7 days" in message:
+
+        duration = "Last 7 Days"
+
+    elif "30 days" in message:
+
+        duration = "Last 30 Days"
+
+    elif "8 weeks" in message:
+
+        duration = "Last 8 Weeks"
+
+    elif "6 months" in message:
+
+        duration = "Last 6 Months"
+
+    if machine:
+        CURRENT_MACHINE = machine
+
+    if shift:
+        CURRENT_SHIFT = shift
+
+    if product:
+        CURRENT_PRODUCT = product
+
+    if duration:
+        CURRENT_DURATION = duration
+
+    # DON'T reset filtered_df
+
+    if CURRENT_SHIFT != "All":
+
+        filtered_df = filtered_df[
+            filtered_df["Shift_Type"] == CURRENT_SHIFT
+        ]
+
+    if CURRENT_MACHINE != "All":
+
+        filtered_df = filtered_df[
+            filtered_df["Machine_ID"] == CURRENT_MACHINE
+        ]
+
+    if CURRENT_PRODUCT != "All":
+
+        filtered_df = filtered_df[
+            filtered_df["Product_Type"] == CURRENT_PRODUCT
+        ]
+
+    # Apply dashboard duration ONLY if no custom duration exists
+
+    if custom_days is None and custom_weeks is None:
+
+        if CURRENT_DURATION == "Last 7 Days":
+
+            filtered_df = filtered_df[
+                filtered_df["Production_Date"]
+                >= latest_date - pd.Timedelta(days=7)
+            ]
+
+        elif CURRENT_DURATION == "Last 30 Days":
+
+            filtered_df = filtered_df[
+                filtered_df["Production_Date"]
+                >= latest_date - pd.Timedelta(days=30)
+            ]
+
+        elif CURRENT_DURATION == "Last 8 Weeks":
+
+            filtered_df = filtered_df[
+                filtered_df["Production_Date"]
+                >= latest_date - pd.Timedelta(weeks=8)
+            ]
+
+        elif CURRENT_DURATION == "Last 6 Months":
+
+            filtered_df = filtered_df[
+                filtered_df["Production_Date"]
+                >= latest_date - pd.Timedelta(days=180)
+            ]
+
+    print("--------------------------------")
+    print("CUSTOM DAYS =", custom_days)
+    print("ROWS AFTER FILTER =", len(filtered_df))
+    print(
+        filtered_df["Production_Date"].min(),
+        filtered_df["Production_Date"].max()
+    )
+    print("--------------------------------")
+
+    trend_type = None
+
+    if "output" in message:
+
+        trend_type = "Actual_Output"
+
+    elif "efficiency" in message:
+
+        trend_type = "Production_Efficiency"
+
+    elif "downtime" in message:
+
+        trend_type = "Downtime_Minutes"
+
+    elif "defect" in message:
+
+        trend_type = "Defect_Count"
+
+    if intent == "best_efficiency":
+
+        best_machine = (
+            filtered_df.groupby("Machine_ID")["Production_Efficiency"]
+            .mean()
+            .idxmax()
+        )
+
+        analytics_answer = (
+            best_machine +
+            " has the best efficiency."
+        )
+
+        print(
+            filtered_df.groupby("Machine_ID")["Production_Efficiency"]
+            .mean()
+        )
+
+    elif intent == "highest_downtime":
+
+        downtime_machine = (
+            filtered_df.groupby("Machine_ID")["Downtime_Minutes"]
+            .mean()
+            .idxmax()
+        )
+
+        analytics_answer = (
+            downtime_machine +
+            " has the highest downtime."
+        )
+
+        print(
+            filtered_df.groupby("Machine_ID")["Downtime_Minutes"]
+            .mean()
+        )
+
+    elif intent == "most_defects":
+
+        defect_machine = (
+            filtered_df.groupby("Machine_ID")["Defect_Count"]
+            .sum()
+            .idxmax()
+        )
+
+        analytics_answer = (
+            defect_machine +
+            " has the most defects."
+        )
+
+        print(
+            filtered_df.groupby("Machine_ID")["Defect_Count"]
+            .sum()
+        )
+
+    elif intent == "production_output":
+
+        total_output = int(
+            filtered_df["Actual_Output"].sum()
+        )
+
+        if custom_days:
+
+            analytics_answer = (
+                "Total output for last "
+                + str(custom_days)
+                + " days is "
+                + str(total_output)
+            )
+
+        elif custom_weeks:
+
+            analytics_answer = (
+                "Total output for last "
+                + str(custom_weeks)
+                + " weeks is "
+                + str(total_output)
+            )
+
+        else:
+
+            analytics_answer = (
+                "Total output is "
+                + str(total_output)
+            )
+
+        if specific_date:
+
+            date_df = df[
+
+                df["Production_Date"] == specific_date
+
+            ]
+
+            total_output = int(
+
+                date_df["Actual_Output"].sum()
+
+            )
+
+            analytics_answer = (
+
+                "Production output for "
+
+                + specific_date.strftime("%B %d")
+
+                + " is "
+
+                + str(total_output)
+
+            )
+
+        else:
+
+            total_output = int(
+
+                filtered_df["Actual_Output"].sum()
+
+            )
+
+            analytics_answer = (
+
+                "Total output is "
+
+                + str(total_output)
+
+            )
+
+    elif intent == "root_cause":
+
+        date_df = df[
+
+            df["Production_Date"] == specific_date
+
+        ]
+
+        output = int(
+            date_df["Actual_Output"].sum()
+        )
+
+        downtime = round(
+            date_df["Downtime_Minutes"].mean(),
+            2
+        )
+
+        efficiency = round(
+            date_df["Production_Efficiency"].mean(),
+            2
+        )
+
+        defects = int(
+            date_df["Defect_Count"].sum()
+        )
+
+        temp = round(
+            date_df["Machine_Temperature"].mean(),
+            2
+        )
+
+        cause = ""
+
+        if downtime > 60:
+
+            cause = "Downtime was unusually high."
+
+        elif defects > 200:
+
+            cause = "Defects increased significantly."
+
+        elif temp > 85:
+
+            cause = "Machine temperature exceeded safe range."
+
+        elif efficiency < 78:
+
+            cause = "Efficiency dropped."
+
+        else:
+
+            cause = "No major abnormality detected."
+
+        analytics_answer = (
+
+            f"Output: {output}<br>"
+            f"Downtime: {downtime} mins<br>"
+            f"Efficiency: {efficiency}%<br>"
+            f"Defects: {defects}<br>"
+            f"Temperature: {temp}°C<br><br>"
+            f"Possible Root Cause:<br>{cause}"
+
+        )
+
+    elif intent == "trend_analysis":
+
+        trend_df = (
+
+            filtered_df
+
+            .groupby("Production_Date")[trend_type]
+
+            .mean()
+
+            .reset_index()
+
+        )
+
+        analytics_answer = ""
+
+        for _, row in trend_df.iterrows():
+
+            analytics_answer += (
+
+                row["Production_Date"]
+
+                .strftime("%b %d")
+
+                +
+
+                " : "
+
+                +
+
+                str(round(row[trend_type],2))
+
+                +
+
+                "<br>"
+
+            )
+
+    elif intent == "compare_machine":
+
+        if len(machines) >= 2:
+
+            m1 = machines[0].upper()
+            m2 = machines[1].upper()
+
+            comparison_df = df.copy()
+
+            machine1_df = comparison_df[
+                comparison_df["Machine_ID"] == m1
+            ]
+
+            machine2_df = comparison_df[
+                comparison_df["Machine_ID"] == m2
+            ]
+
+            print(m1)
+            print(m2)
+            print(len(machine1_df))
+            print(len(machine2_df))
+
+            eff1 = round(
+                machine1_df["Production_Efficiency"].mean(),
+                2
+            )
+
+            eff2 = round(
+                machine2_df["Production_Efficiency"].mean(),
+                2
+            )
+
+            down1 = round(
+                machine1_df["Downtime_Minutes"].mean(),
+                2
+            )
+
+            down2 = round(
+                machine2_df["Downtime_Minutes"].mean(),
+                2
+            )
+
+            def1 = int(
+                machine1_df["Defect_Count"].sum()
+            )
+
+            def2 = int(
+                machine2_df["Defect_Count"].sum()
+            )
+
+            score1 = 0
+            score2 = 0
+
+            if eff1 > eff2:
+                score1 += 1
+            else:
+                score2 += 1
+
+            if down1 < down2:
+                score1 += 1
+            else:
+                score2 += 1
+
+            if def1 < def2:
+                score1 += 1
+            else:
+                score2 += 1
+
+            better_machine = m1 if score1 > score2 else m2
+
+            analytics_answer = f"""
+
+            <b>{m1}</b><br>
+            Efficiency : {eff1}%<br>
+            Downtime : {down1} mins<br>
+            Defects : {def1}<br><br>
+
+            <b>{m2}</b><br>
+            Efficiency : {eff2}%<br>
+            Downtime : {down2} mins<br>
+            Defects : {def2}<br><br>
+
+            <b>Recommendation:</b><br>
+            {better_machine} performs better overall.
+
+            """
+        
+    # if "highest downtime" in message:
+
+    #     analytics_answer = highest_downtime_machine
+
+    # elif "best efficiency" in message:
+
+    #     analytics_answer = best_efficiency_machine
+
+    # elif "most defects" in message:
+
+    #     analytics_answer = most_defect_machine
+
+    # elif "current risk" in message:
+
+    #     analytics_answer = risk_level
+
+    # elif "total defects" in message:
+
+    #     analytics_answer = str(total_defects)
+
+    print(message)
+
+    return {
+
+        "intent": intent,
+
+        "machine": machine,
+
+        "shift": shift,
+
+        "product": product,
+
+        "duration": duration,
+
+        "analytics_answer": analytics_answer
+
+    }
 
 # ---------------------------------
 # MONGODB CONNECTION
@@ -18,6 +938,8 @@ client = MongoClient(
 db = client["EMS_Production_DB"]
 
 collection = db["production_data"]
+
+settings_collection = db["settings"]
 
 # ---------------------------------
 # LOAD ML MODEL
@@ -32,13 +954,130 @@ defect_model = joblib.load(
     "models/defect_model.pkl"
 )
 
+@app.route("/")
+
+def home():
+
+    return redirect("/login")
+
+@app.route("/login", methods=["GET","POST"])
+def login():
+
+    if request.method == "POST":
+
+        username = request.form["username"]
+
+        password = request.form["password"]
+
+        if username == "admin" and password == "admin123":
+
+            session["role"] = "admin"
+
+            return redirect("/admin")
+
+        elif username == "user" and password == "user123":
+
+            session["role"] = "user"
+
+            return redirect("/dashboard")
+
+        else:
+
+            return "Invalid Login"
+
+    return render_template(
+        "login.html"
+    )
+
+@app.route("/admin_dashboard")
+def admin_dashboard():
+
+    return render_template(
+        "admin_dashboard.html"
+    )
+
+@app.route("/admin")
+def admin():
+
+    if session.get("role") != "admin":
+
+        return redirect("/login")
+
+    settings = settings_collection.find_one()
+
+    return render_template(
+
+        "admin_dashboard.html",
+
+        settings=settings
+
+    )
+
+@app.route("/save_settings", methods=["POST"])
+def save_settings():
+
+    temperature_limit = int(
+        request.form["temperature_limit"]
+    )
+
+    efficiency_limit = int(
+        request.form["efficiency_limit"]
+    )
+
+    downtime_limit = int(
+        request.form["downtime_limit"]
+    )
+
+    defect_limit = int(
+        request.form["defect_limit"]
+    )
+
+    inventory_limit = int(
+        request.form["inventory_limit"]
+    )
+
+    runtime_limit = int(
+        request.form["runtime_limit"]
+    )
+
+    settings_collection.delete_many({})
+
+    settings_collection.insert_one({
+
+        "temperature_limit": temperature_limit,
+
+        "efficiency_limit": efficiency_limit,
+
+        "downtime_limit": downtime_limit,
+
+        "defect_limit": defect_limit,
+
+        "inventory_limit": inventory_limit,
+        
+        "runtime_limit": runtime_limit
+
+    })
+
+    return redirect("/admin")
+
 # ---------------------------------
 # DASHBOARD ROUTE
 # ---------------------------------
 
-@app.route("/")
+@app.route("/logout")
+def logout():
+
+    session.clear()
+
+    return redirect("/login")
+
+@app.route("/dashboard")
 
 def dashboard():
+
+    if "role" not in session:
+
+        return redirect("/login")
 
     prediction_result = None
 
@@ -65,6 +1104,16 @@ def dashboard():
         "duration",
         "Last 7 Days"
     )
+
+    global LAST_SHIFT
+    global LAST_MACHINE
+    global LAST_PRODUCT
+    global LAST_DURATION
+
+    LAST_SHIFT = selected_shift
+    LAST_MACHINE = selected_machine
+    LAST_PRODUCT = selected_product
+    LAST_DURATION = selected_duration
 
     # LOAD DATA FROM MONGODB
 
@@ -347,8 +1396,26 @@ def dashboard():
                 round(
                     df["Inventory_Level"].mean(),
                     2
+                ),
+
+            "Defect_Count":
+                int(
+                    df["Defect_Count"].sum()
+                ),
+
+            "Machine_Run_Time":
+                round(
+                    df["Machine_Run_Time"].mean(),
+                    2
                 )
         }
+
+        print("Temperature =", machine_summary["Machine_Temperature"])
+        print("Efficiency =", machine_summary["Production_Efficiency"])
+        print("Downtime =", machine_summary["Downtime_Minutes"])
+        print("Inventory =", machine_summary["Inventory_Level"])
+        print("Runtime =", machine_summary["Machine_Run_Time"])
+        print("Defects =", machine_summary["Defect_Count"])
 
         # ---------------------------------
         # SMART RISK DETECTION
@@ -430,9 +1497,26 @@ def dashboard():
 
         ai_insights = []
 
+        settings = settings_collection.find_one()
+
+        temp_limit = settings["temperature_limit"]
+        efficiency_limit = settings["efficiency_limit"]
+        downtime_limit = settings["downtime_limit"]
+        defect_limit = settings["defect_limit"]
+        inventory_limit = settings["inventory_limit"]
+        runtime_limit = settings["runtime_limit"]
+
+        print("Limits:")
+        print(temp_limit)
+        print(efficiency_limit)
+        print(downtime_limit)
+        print(defect_limit)
+        print(inventory_limit)
+        print(runtime_limit)
+
         # DOWNTIME ANALYSIS
 
-        if machine_summary["Downtime_Minutes"] > 55:
+        if machine_summary["Downtime_Minutes"] > downtime_limit:
 
             ai_insights.append(
 
@@ -444,7 +1528,7 @@ def dashboard():
 
         temperature_alert = False
 
-        if machine_summary["Machine_Temperature"] > 75:
+        if machine_summary["Machine_Temperature"] > temp_limit:
 
             ai_insights.append(
 
@@ -452,11 +1536,11 @@ def dashboard():
 
             )
 
-        temperature_alert = True
+            temperature_alert = True
 
         # EFFICIENCY ANALYSIS
 
-        if machine_summary["Production_Efficiency"] < 70:
+        if machine_summary["Production_Efficiency"] < efficiency_limit:
 
             ai_insights.append(
 
@@ -466,11 +1550,19 @@ def dashboard():
 
         # MATERIAL ANALYSIS
 
-        if machine_summary["Inventory_Level"] < 550:
+        if machine_summary["Inventory_Level"] < inventory_limit:
 
             ai_insights.append(
 
                 "Critical material availability is low."
+
+            )
+
+        if machine_summary["Machine_Run_Time"] < runtime_limit:
+
+            ai_insights.append(
+
+                "Machine runtime is below target."
 
             )
 
@@ -484,9 +1576,19 @@ def dashboard():
 
             )
 
+        # DEFECT ANALYSIS
+
+        if machine_summary["Defect_Count"] > defect_limit:
+
+            ai_insights.append(
+
+                "Defect count exceeded acceptable limit."
+
+            )
+
         # MAINTENANCE RECOMMENDATION
 
-        if machine_summary["Downtime_Minutes"] > 100 and machine_summary["Machine_Temperature"] > 100:
+        if machine_summary["Downtime_Minutes"] > downtime_limit and machine_summary["Machine_Temperature"] > temp_limit:
 
             ai_insights.append(
 
@@ -946,6 +2048,18 @@ def dashboard():
         ]
     )
 
+    global BEST_MACHINE
+    global DOWNTIME_MACHINE
+    global DEFECT_MACHINE
+
+    BEST_MACHINE = best_efficiency_machine
+    DOWNTIME_MACHINE = highest_downtime_machine
+    DEFECT_MACHINE = most_defect_machine
+
+    print("BEST =", BEST_MACHINE)
+    print("DOWNTIME =", DOWNTIME_MACHINE)
+    print("DEFECT =", DEFECT_MACHINE)
+
     # -----------------------------------
     # MACHINE SPECIFIC PERFORMANCE GRAPHS
     # -----------------------------------
@@ -1261,6 +2375,21 @@ def dashboard():
             ]
         })
 
+
+    global LAST_TOTAL_OUTPUT
+    global LAST_AVG_EFFICIENCY
+    global LAST_AVG_DOWNTIME
+    global LAST_TOTAL_DEFECTS
+    global LAST_AI_INSIGHTS
+    global LAST_RISK_LEVEL
+
+    LAST_TOTAL_OUTPUT = total_output
+    LAST_AVG_EFFICIENCY = avg_efficiency
+    LAST_AVG_DOWNTIME = avg_downtime
+    LAST_TOTAL_DEFECTS = total_defects
+    LAST_AI_INSIGHTS = ai_insights
+    LAST_RISK_LEVEL = risk_level
+
     # ---------------------------------
     # SEND VALUES TO HTML
     # ---------------------------------
@@ -1338,6 +2467,150 @@ def dashboard():
         temperature_alert=temperature_alert,
 
         machine_details=machine_details
+    )
+
+@app.route("/download_report")
+def download_report():
+
+    total_output = LAST_TOTAL_OUTPUT
+    avg_efficiency = LAST_AVG_EFFICIENCY
+    avg_downtime = LAST_AVG_DOWNTIME
+    total_defects = LAST_TOTAL_DEFECTS
+
+    import os
+
+    pdf_path = os.path.join(
+        os.path.dirname(__file__),
+        "production_report.pdf"
+    )
+
+    pdf = SimpleDocTemplate(pdf_path)
+
+    styles = getSampleStyleSheet()
+
+    content = []
+
+    from datetime import datetime
+
+    content.append(
+        Paragraph(
+            f"Generated On : {datetime.now().strftime('%d-%m-%Y %H:%M:%S')}",
+            styles["Normal"]
+        )
+    )
+
+    content.append(Spacer(1,20))
+
+    content.append(Spacer(1,12))
+
+    content.append(
+        Paragraph(
+            "EMS Production Analytics Report",
+            styles["Title"]
+        )
+    )
+
+    content.append(Spacer(1,20))
+
+    content.append(
+        Paragraph(
+            "Report Filters",
+            styles["Heading2"]
+        )
+    )
+
+    content.append(
+        Paragraph(
+            f"Duration : {LAST_DURATION}",
+            styles["Normal"]
+        )
+    )
+
+    content.append(
+        Paragraph(
+            f"Shift : {LAST_SHIFT}",
+            styles["Normal"]
+        )
+    )
+
+    content.append(
+        Paragraph(
+            f"Machine : {LAST_MACHINE}",
+            styles["Normal"]
+        )
+    )
+
+    content.append(
+        Paragraph(
+            f"Product : {LAST_PRODUCT}",
+            styles["Normal"]
+        )
+    )
+
+    content.append(Spacer(1,20))
+
+    content.append(
+        Paragraph(
+            f"Total Output : {total_output}",
+            styles["Normal"]
+        )
+    )
+
+    content.append(
+        Paragraph(
+            f"Average Efficiency : {avg_efficiency}%",
+            styles["Normal"]
+        )
+    )
+
+    content.append(
+        Paragraph(
+            f"Average Downtime : {avg_downtime} mins",
+            styles["Normal"]
+        )
+    )
+
+    content.append(
+        Paragraph(
+            f"Total Defects : {total_defects}",
+            styles["Normal"]
+        )
+    )
+
+    content.append(Spacer(1,20))
+
+    content.append(
+        Paragraph(
+            "AI Manufacturing Insights",
+            styles["Heading2"]
+        )
+    )
+
+    for insight in LAST_AI_INSIGHTS:
+
+        content.append(
+            Paragraph(
+                "• " + insight,
+                styles["Normal"]
+            )
+        )
+
+    content.append(Spacer(1,20))
+
+    content.append(
+        Paragraph(
+            f"Risk Level : {LAST_RISK_LEVEL}",
+            styles["Heading2"]
+        )
+    )
+
+    pdf.build(content)
+
+    print("PDF SAVED AT:", pdf_path)
+
+    return send_file(
+        pdf_path,
+        as_attachment=True
     )
 
 # ---------------------------------

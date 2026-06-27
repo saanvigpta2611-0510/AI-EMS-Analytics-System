@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>EMS Login</title>
+
+        <style>
+
+            body{
+                background:#f2f2f2;
+                display:flex;
+                justify-content:center;
+                align-items:center;
+                height:100vh;
+                font-family:Arial;
+            }
+
+            .login-box{
+                background:white;
+                padding:40px;
+                border-radius:10px;
+                width:350px;
+                box-shadow:0 5px 20px rgba(0,0,0,0.2);
+                height: auto;
+            }
+
+            input{
+                width:100%;
+                padding:12px;
+                margin-top:10px;
+                margin-bottom:20px;
+            }
+
+            button{
+                width:100%;
+                padding:12px;
+                background:#0d6efd;
+                color:white;
+                border:none;
+                cursor:pointer;
+            }
+
+            body{
+
+                font-family: Arial;
+                background-image: url("{{ url_for('static', filename='icons/bg1.avif') }}");
+                background-size: cover;
+                background-position: center;
+                background-repeat: no-repeat;
+                background-attachment: fixed;
+
+            }
+
+            .container{
+
+                width:700px;
+
+                margin:auto;
+
+                margin-top:40px;
+
+                padding:30px;
+
+                border-radius:15px;
+
+                background: rgba(255,255,255,0.85);
+
+                backdrop-filter: blur(8px);
+
+                box-shadow:0 5px 20px rgba(0,0,0,0.3);
+
+            }
+
+        </style>
+
+    </head>
+
+    <body>
+
+        <div class="login-box" class="container">
+
+        <h2>EMS Analytics Login</h2>
+
+            <form action="/login" method="POST">
+
+                Username
+
+                <input
+                    type="text"
+                    name="username"
+                    required
+                >
+
+                Password
+
+                <input
+                    type="password"
+                    name="password"
+                    required
+                >
+
+                <button type="submit">
+
+                    Login
+
+                </button>
+
+                <h4>admin: admin  (admin123)<br>
+                    user: user (user123)
+                </h4>
+
+            </form>
+
+        </div>
+
+    </body>
+</html>
