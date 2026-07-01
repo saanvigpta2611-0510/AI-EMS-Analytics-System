@@ -17,171 +17,103 @@
     <style>
 
         #loader{
-
             position: fixed;
-
             top: 0;
-
             left: 0;
-
             width: 100%;
-
             height: 100%;
-
             background: rgba(255,255,255,0.25);
-
             backdrop-filter: blur(2px);
-
             z-index: 9999;
-
             display: flex;
-
             justify-content: center;
-
             align-items: center;
-
         }
 
         .spinner-border{
-
             width: 5rem;
-
             height: 5rem;
         }
 
         /* CHAT BUTTON */
 
         #chatbotBtn{
-
             position: fixed;
-
             bottom: 20px;
-
             right: 20px;
-
             width: 60px;
-
             height: 60px;
-
             border-radius: 50%;
-
             border: none;
-
             font-size: 24px;
-
             background: rgba(51, 51, 51, 0.573);
-
             color: white;
-
             z-index: 9998;
-
             box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-
         }
 
 
         /* CHAT WINDOW */
 
         #chatbotWindow{
-
             position: fixed;
             bottom: 100px;
             right: 20px;
-
             width: 400px;
             height: 500px;
-
             background: white;
             border-radius: 10px;
             box-shadow: 0 5px 20px rgba(0,0,0,0.3);
-
             display: none;
-
             flex-direction: column;
-
             z-index: 9998;
-
             resize: both;
-
             overflow: hidden;
-
             min-width: 300px;
             min-height: 400px;
         }
 
         #chatbotHeader{
-
             background: rgb(44, 44, 44);
-
             color: white;
-
             padding: 12px;
-
             font-weight: bold;
-
         }
 
         #sendBtn{
-
             background-color: rgb(44,44,44);
-
             width:100%;
-
             margin-top:5px;
-
             position:relative;
-
             z-index:9999;
         }
 
         .user-message{
-
             background:#0d6efd;
-
             color:white;
-
             padding:10px 15px;
-
             border-radius:15px;
-
             margin:8px;
-
             width:fit-content;
-
             max-width:80%;
-
             margin-left:auto;
-
             text-align:right;
-
         }
 
         .bot-message{
-
             background:#f1f1f1;
-
             color:black;
-
             padding:10px 15px;
-
             border-radius:15px;
-
             margin:8px;
-
             width:fit-content;
-
             max-width:80%;
-
         }
 
         #chatMessages{
-
             flex:1;
-
             overflow-y:auto;
-
             padding:10px;
-
         }
 
         #chatInputArea{
@@ -190,83 +122,50 @@
         }
 
         #quickActions{
-
             padding: 10px;
-
             display: flex;
-
             flex-wrap: wrap;
-
             gap: 10px;
-
             border-bottom: 1px solid #ddd;
-
         }
 
         .quick-btn{
-
             border: none;
-
             background: #e9ecef;
-
             padding: 7px 17px;
-
             border-radius: 20px;
-
             font-size: 12px;
-
             cursor: pointer;
-
             transition: 0.3s;
-
         }
 
         .quick-btn:hover{
-
             background: #0d6efd;
-
             color: white;
-
         }
 
         .chat-time{
-
             font-size: 10px;
-
             color: gray;
-
             margin-top: 5px;
-
             text-align: right;
-
         }
 
         .user-message .chat-time{
-
             color: rgba(255,255,255,0.8);
-
         }
 
         .bot-message .chat-time{
-
             color: gray;
-
         }
 
         .logout-btn{
-
             background:#dc3545;
-
             color:white;
-
             border:none;
-
             padding:10px 18px;
-
             border-radius:8px;
-
             cursor:pointer;
-
         }
 
         
@@ -291,9 +190,7 @@
 
     <div id="loader">
 
-        <div class="spinner-border
-                    text-primary"
-            role="status">
+        <div class="spinner-border text-primary" role="status">
 
         </div>
 
@@ -311,8 +208,7 @@
 
             </span>
 
-            <a href="/download_report"
-                class="btn btn-success">
+            <a href="/download_report" class="btn btn-success">
                 Download Report
             </a>
 
@@ -784,12 +680,7 @@
 
                                 </h4>
 
-                                <button
-                                    type="button"
-                                    class="btn-close"
-                                    data-bs-dismiss="modal">
-
-                                </button>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
 
                             </div>
 
@@ -851,11 +742,7 @@
                                     Machine Performance Graph
                                 </h3>
 
-                                <button
-                                    type="button"
-                                    class="btn-close"
-                                    data-bs-dismiss="modal">
-                                </button>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
 
                             </div>
 
@@ -872,12 +759,7 @@
 
                                 </div>
 
-                                <iframe
-                                    id="performanceFrame"
-                                    width="100%"
-                                    height="500"
-                                    style="display:none;border:none;">
-                                </iframe>
+                                <iframe id="performanceFrame" width="100%" height="500" style="display:none;border:none;"> </iframe>
 
                             </div>
 
@@ -1217,11 +1099,7 @@
 
                                 </h5>
 
-                                <button
-                                    class="btn btn-link text-decoration-none fs-1 fw-bold text-success"
-                                    data-bs-toggle="modal"
-                                    data-bs-target="#performanceModal"
-                                    onclick="loadPerformanceGraph('efficiency')">
+                                <button class="btn btn-link text-decoration-none fs-1 fw-bold text-success" data-bs-toggle="modal" data-bs-target="#performanceModal" onclick="loadPerformanceGraph('efficiency')">
 
                                     {{ best_efficiency_machine }}
 
@@ -1242,11 +1120,7 @@
 
                                 </h5>
 
-                                <button
-                                    class="btn btn-link text-decoration-none fs-1 fw-bold text-warning"
-                                    data-bs-toggle="modal"
-                                    data-bs-target="#performanceModal"
-                                    onclick="loadPerformanceGraph('downtime')">
+                                <button class="btn btn-link text-decoration-none fs-1 fw-bold text-warning" data-bs-toggle="modal" data-bs-target="#performanceModal" onclick="loadPerformanceGraph('downtime')">
 
                                     {{ highest_downtime_machine }}
 
@@ -1268,11 +1142,7 @@
 
                                 </h5>
 
-                                <button
-                                    class="btn btn-link text-decoration-none fs-1 fw-bold text-danger"
-                                    data-bs-toggle="modal"
-                                    data-bs-target="#performanceModal"
-                                    onclick="loadPerformanceGraph('defect')">
+                                <button class="btn btn-link text-decoration-none fs-1 fw-bold text-danger" data-bs-toggle="modal" data-bs-target="#performanceModal" onclick="loadPerformanceGraph('defect')">
 
                                     {{ most_defect_machine }}
 
@@ -1340,11 +1210,7 @@
                                     Root Cause Analysis
                                 </h4>
 
-                                <button
-                                    type="button"
-                                    class="btn-close"
-                                    data-bs-dismiss="modal">
-                                </button>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
 
                             </div>
 

@@ -51,23 +51,24 @@
             }
 
             .container{
-
                 width:700px;
-
                 margin:auto;
-
                 margin-top:40px;
-
                 padding:30px;
-
                 border-radius:15px;
-
                 background: rgba(255,255,255,0.85);
-
                 backdrop-filter: blur(8px);
-
                 box-shadow:0 5px 20px rgba(0,0,0,0.3);
+            }
 
+            .error-message{
+                color: #dc3545;
+                background: #f8d7da;
+                border:1px solid #f5c2c7;
+                padding:10px;
+                margin-bottom:15px;
+                border-radius:6px;
+                text-align:center;
             }
 
         </style>
@@ -84,19 +85,17 @@
 
                 Username
 
-                <input
-                    type="text"
-                    name="username"
-                    required
-                >
+                <input type="text" name="username" required>
 
                 Password
 
-                <input
-                    type="password"
-                    name="password"
-                    required
-                >
+                <input type="password" name="password" required>
+
+                {% if error %}
+                <div class="error-message">
+                    {{ error }}
+                </div>
+                {% endif %}
 
                 <button type="submit">
 
