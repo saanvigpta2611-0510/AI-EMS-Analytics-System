@@ -327,6 +327,33 @@ def chat():
             match.group(1)
         )
 
+    custom_months = None
+
+    match = re.search(
+        r'last\s+(\d+)\s+months?',
+        message
+    )
+
+    if match:
+
+        custom_months = int(
+            match.group(1)
+        )
+
+
+    custom_years = None
+
+    match = re.search(
+        r'last\s+(\d+)\s+years?',
+        message
+    )
+
+    if match:
+
+        custom_years = int(
+            match.group(1)
+        )
+
     intent = detect_intent(message)
 
     # Force analytics intents
@@ -391,6 +418,9 @@ def chat():
         df["Production_Date"]
     )
 
+    print("Dataset starts :", df["Production_Date"].min())
+    print("Dataset ends   :", df["Production_Date"].max())
+
     filtered_df = df.copy()
 
     filtered_df["Production_Date"] = pd.to_datetime(
@@ -411,6 +441,20 @@ def chat():
         filtered_df = df[
             df["Production_Date"]
             >= latest_date - pd.Timedelta(weeks=custom_weeks)
+        ]
+
+    elif custom_months:
+
+        filtered_df = df[
+            df["Production_Date"]
+            >= latest_date - pd.DateOffset(months=custom_months)
+        ]
+
+    elif custom_years:
+
+        filtered_df = df[
+            df["Production_Date"]
+            >= latest_date - pd.DateOffset(years=custom_years)
         ]
 
     machine = None
@@ -516,7 +560,12 @@ def chat():
 
     # Apply dashboard duration ONLY if no custom duration exists
 
-    if custom_days is None and custom_weeks is None:
+    if (
+        custom_days is None
+        and custom_weeks is None
+        and custom_months is None
+        and custom_years is None
+    ):
 
         if CURRENT_DURATION == "Last 7 Days":
 
@@ -547,15 +596,18 @@ def chat():
             ]
 
     print("--------------------------------")
+    print("CURRENT_DURATION =", CURRENT_DURATION)
     print("CUSTOM DAYS =", custom_days)
+    print("CUSTOM WEEKS =", custom_weeks)
+    print("CUSTOM MONTHS =", custom_months)
+    print("CUSTOM YEARS =", custom_years)
+
     print("ROWS AFTER FILTER =", len(filtered_df))
-    print(
-        filtered_df["Production_Date"].min(),
-        filtered_df["Production_Date"].max()
-    )
+    print("MIN DATE =", filtered_df["Production_Date"].min())
+    print("MAX DATE =", filtered_df["Production_Date"].max())
     print("--------------------------------")
 
-    trend_type = None
+    trend_type = "Actual_Output"
 
     if "output" in message:
 
@@ -648,6 +700,24 @@ def chat():
                 "Total output for last "
                 + str(custom_weeks)
                 + " weeks is "
+                + str(total_output)
+            )
+
+        elif custom_months:
+
+            analytics_answer = (
+                "Total output for last "
+                + str(custom_months)
+                + " months is "
+                + str(total_output)
+            )
+
+        elif custom_years:
+
+            analytics_answer = (
+                "Total output for last "
+                + str(custom_years)
+                + " years is "
                 + str(total_output)
             )
 
@@ -767,40 +837,149 @@ def chat():
     elif intent == "trend_analysis":
 
         trend_df = (
-
             filtered_df
-
             .groupby("Production_Date")[trend_type]
-
             .mean()
-
             .reset_index()
-
         )
 
-        analytics_answer = ""
+        if trend_type == "Actual_Output":
+            metric_name = "Production Output"
+            unit = " Units"
 
-        for _, row in trend_df.iterrows():
+        elif trend_type == "Production_Efficiency":
+            metric_name = "Efficiency"
+            unit = "%"
 
-            analytics_answer += (
+        elif trend_type == "Downtime_Minutes":
+            metric_name = "Downtime"
+            unit = " mins"
 
-                row["Production_Date"]
+        elif trend_type == "Defect_Count":
+            metric_name = "Defects"
+            unit = ""
 
-                .strftime("%b %d")
+        else:
+            metric_name = "Value"
+            unit = ""
 
-                +
+        avg_value = round(trend_df[trend_type].mean(), 2)
 
-                " : "
+        max_row = trend_df.loc[
+            trend_df[trend_type].idxmax()
+        ]
 
-                +
+        min_row = trend_df.loc[
+            trend_df[trend_type].idxmin()
+        ]
 
-                str(round(row[trend_type],2))
+        first_value = trend_df.iloc[0][trend_type]
+        last_value = trend_df.iloc[-1][trend_type]
 
-                +
+        if last_value > first_value:
+            overall = "Increasing 📈"
 
-                "<br>"
+        elif last_value < first_value:
+            overall = "Decreasing 📉"
 
+        else:
+            overall = "Stable ➖"
+
+        analytics_answer = f"""
+
+        <b>📊 Trend Analysis</b><br><br>
+
+        <b>Overall Trend:</b> {overall}<br>
+
+        <b>Average {metric_name}:</b> {avg_value}{unit}<br>
+
+        <b>Highest {metric_name}:</b>
+        {round(max_row[trend_type],2)}{unit}
+        ({max_row['Production_Date'].strftime('%b %d')})<br>
+
+        <b>Lowest {metric_name}:</b>
+        {round(min_row[trend_type],2)}{unit}
+        ({min_row['Production_Date'].strftime('%b %d')})<br><br>
+
+        """
+
+        if custom_months or custom_years:
+
+            monthly = (
+                filtered_df
+                .groupby(filtered_df["Production_Date"].dt.strftime("%B"))
+                [trend_type]
+                .mean()
+                .reset_index()
             )
+
+            analytics_answer += "<b>📅 Monthly Breakdown</b><br>"
+
+            for _, row in monthly.iterrows():
+
+                analytics_answer += (
+                    f"{row['Production_Date']} : "
+                    f"{round(row[trend_type],2)}<br>"
+                )
+
+            analytics_answer += "<br>"
+
+        elif custom_weeks:
+
+            weekly = (
+                filtered_df
+                .groupby(filtered_df["Production_Date"].dt.isocalendar().week)
+                [trend_type]
+                .mean()
+                .reset_index()
+            )
+
+            analytics_answer += "<b>📅 Weekly Breakdown</b><br>"
+
+            for _, row in weekly.iterrows():
+
+                analytics_answer += (
+                    f"Week {row['week']} : "
+                    f"{round(row[trend_type],2)}<br>"
+                )
+
+            analytics_answer += "<br>"
+
+        elif custom_days:
+
+            analytics_answer += "<b>📅 Daily Breakdown</b><br>"
+
+            for _, row in trend_df.iterrows():
+
+                analytics_answer += (
+
+                    row["Production_Date"].strftime("%b %d")
+
+                    + " : "
+
+                    + str(round(row[trend_type],2))
+
+                    + "<br>"
+
+                )
+
+            analytics_answer += "<br>"
+
+        analytics_answer += f"""
+
+        <b>💡 AI Summary</b><br>
+
+        • Production remained {overall.lower()}.<br>
+
+        • Average value was {avg_value}.<br>
+
+        • Highest performance occurred on
+        {max_row['Production_Date'].strftime('%b %d')}.<br>
+
+        • Lowest performance occurred on
+        {min_row['Production_Date'].strftime('%b %d')}.<br>
+
+        """
 
     elif intent == "compare_machine":
 
